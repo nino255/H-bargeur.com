@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <title>hébargeurSERV</title>
+  <style>
+    body { background:#0b0b0b; color:white; font-family:Arial, sans-serif; text-align:center; margin:0; }
+    .login-box {
+      margin:200px auto; width:300px; padding:20px; background:#111; border-radius:10px;
+      box-shadow:0 0 15px rgba(0,0,0,0.6);
+    }
+    input, button {
+      width:100%; padding:10px; margin:8px 0; border:none; border-radius:6px; font-size:14px;
+    }
+    input { background:#222; color:white; }
+    button { background:#4285f4; color:white; cursor:pointer; }
+    button:hover { background:#3367d6; }
+    #dashboard { display:none; padding:20px; }
+    .stat { margin:10px 0; }
+    .bar { height:12px; background:#333; border-radius:6px; overflow:hidden; margin-top:4px; }
+    .fill { height:100%; width:0; background:limegreen; transition:width 0.5s; }
+    .network { margin-top:30px; border-top:1px solid #444; padding-top:15px; }
+    .topbar {
+      display:flex; justify-content:flex-end; align-items:center; padding:10px 20px;
+      background:#111; position:fixed; top:0; left:0; right:0;
+    }
+    .logout {
+      background:red; color:white; padding:4px 10px; font-size:12px;
+      border:none; border-radius:4px; cursor:pointer;
+    }
+    /* Bouton contrôle serveur */
+    .control-btn {
+      position:fixed; bottom:20px; left:20px;
+      background:#444; color:white; padding:15px;
+      border-radius:8px; text-decoration:none;
+      font-weight:bold; font-size:14px;
+      transition:background 0.3s;
+    }
+    .control-btn:hover { background:#666; }
+  </style>
+</head>
+<body>
+  <!-- LOGIN -->
+  <div id="login" class="login-box">
+    <h1>Connexion</h1>
+    <input type="text" id="username" placeholder="Email / Numéro de téléphone">
+    <input type="password" id="password" placeholder="Mot de passe">
+    <button onclick="login()">Se connecter</button>
+  </div>
+
+  <!-- DASHBOARD -->
+  <div id="dashboard">
+    <div class="topbar">
+      <span id="welcomeName" style="margin-right:10px;"></span>
+      <button class="logout" onclick="logout()">Déco</button>
+    </div>
+
+    <h1 style="margin-top:60px;">Dashboard Serveur - Hebargeur4589.aternos.me</h1>
+    <p id="status">Statut : <b>Arrêté</b></p>
+    <p>Crash Count : <span id="crashCount">0</span></p>
+
+    <div class="stat">CPU : <span id="cpuVal">0%</span>
+      <div class="bar"><div class="fill" id="cpuBar"></div></div>
+    </div>
+    <div class="stat">GPU : <span id="gpuVal">0%</span>
+      <div class="bar"><div class="fill" id="gpuBar"></div></div>
+    </div>
+    <div class="stat">RAM : <span id="ramVal">0%</span>
+      <div class="bar"><div class="fill" id="ramBar"></div></div>
+    </div>
+    <div class="stat">Stockage : <span id="storageVal">0%</span>
+      <div class="bar"><div class="fill" id="storageBar"></div></div>
+    </div>
+    <div class="stat">Température : <span id="tempVal">0°C</span>
+      <div class="bar"><div class="fill" id="tempBar"></div></div>
+    </div>
+
+    <button onclick="startServer()">Démarrer</button>
+    <button onclick="shutdownServer()">Arrêt</button>
+    <button onclick="stressTest()">Stress Test</button>
+
+    <div class="network">
+      <h2>Réseau</h2>
+      <p>Ping : <span id="pingVal">0</span> ms</p>
+      <p>Upload : <span id="uploadVal">0</span> Mbps</p>
+      <p>Download : <span id="downloadVal">0</span> Mbps</p>
+    </div>
+  </div>
+
+  <!-- Bouton Contrôle Serveur -->
+  <a href="https://aternos.org/server/" target="_blank" class="control-btn">Contrôle Serveur</a>
+
+  <audio id="beep" src="https://actions.google.com/sounds/v1/alarms/beep_short.ogg"></audio>
+
+  <script>
+    let serverOnline = false;
+    let crashCount = 0;
+    let intervalStats;
+
+    function login(){
+      let user = document.getElementById("username").value;
+      let pass = document.getElementById("password").value;
+      if(user && pass){
+        document.getElementById("login").style.display="none";
+        document.getElementById("dashboard").style.display="block";
+        document.getElementById("welcomeName").innerText = user;
+      } else {
+        alert("Veuillez remplir tous les champs !");
+      }
+    }
+
+    function logout(){
+      document.getElementById("dashboard").style.display="none";
+      document.getElementById("login").style.display="block";
+      shutdownServer();
+    }
+
+    function updateStats(c,g,r,s,t){
+      document.getElementById("cpuVal").innerText=c+"%";
+      document.getElementById("gpuVal").innerText=g+"%";
+      document.getElementById("ramVal").innerText=r+"%";
+      document.getElementById("storageVal").innerText=s+"%";
+      document.getElementById("tempVal").innerText=t+"°C";
+      document.getElementById("cpuBar").style.width=c+"%";
+      document.getElementById("gpuBar").style.width=g+"%";
+      document.getElementById("ramBar").style.width=r+"%";
+      document.getElementById("storageBar").style.width=s+"%";
+      document.getElementById("tempBar").style.width=t+"%";
+    }
+
+    function updateNetwork(p,u,d){
+      document.getElementById("pingVal").innerText=p;
+      document.getElementById("uploadVal").innerText=u;
+      document.getElementById("downloadVal").innerText=d;
+    }
+
+    function startServer(){
+      if(!serverOnline){
+        serverOnline = true;
+        document.getElementById("status").innerHTML="Statut : <b>En ligne</b>";
+
+        intervalStats = setInterval(()=>{
+          let cpu = Math.floor(Math.random()*60)+20;
+          let gpu = Math.floor(Math.random()*60)+20;
+          let ram = Math.floor(Math.random()*60)+20;
+          let storage = Math.floor(Math.random()*40)+10;
+          let temp = Math.floor(Math.random()*30)+50;
+          updateStats(cpu,gpu,ram,storage,temp);
+
+          let ping = Math.floor(Math.random()*100)+20;
+          let upload = (Math.random()*50).toFixed(1);
+          let download = (Math.random()*100).toFixed(1);
+          updateNetwork(ping,upload,download);
+
+          if(temp > 95){
+            crash();
+          }
+        },1000);
+      }
+    }
+
+    function shutdownServer(){
+      serverOnline = false;
+      clearInterval(intervalStats);
+      updateStats(0,0,0,0,0);
+      updateNetwork(0,0,0);
+      document.getElementById("status").innerHTML="Statut : <b>Arrêté</b>";
+    }
+
+    function stressTest(){
+      if(serverOnline){
+        updateStats(100,100,100,100,100);
+        updateNetwork(999,500,1000);
+
+        alert("⚠️ Stress Test activé !");
+        let beep = document.getElementById("beep");
+        let intervalBeep = setInterval(()=>{ beep.play(); },500);
+
+        setTimeout(()=>{
+          clearInterval(intervalBeep);
+          crash();
+        },3000);
+      }
+    }
+
+    function crash(){
+      serverOnline = false;
+      clearInterval(intervalStats);
+      crashCount++;
+      document.getElementById("status").innerHTML="Statut : <b>Crash</b>";
+      document.getElementById("crashCount").textContent = crashCount;
+      updateStats(0,0,0,0,0);
+      updateNetwork(0,0,0);
+      alert("💥 SERVEUR CRASH !");
+    }
+  </script>
+</body>
+</html>
